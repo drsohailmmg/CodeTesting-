@@ -1,0 +1,79 @@
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+from tkinter import Tk, filedialog
+import cv2
+
+# Hide the root Tk window
+Tk().withdraw()
+
+# Open a file dialog to select an image file
+file_path = filedialog.askopenfilename(title="Select a blood smear image file")
+
+# Check if a file was selected
+if file_path:
+    # Load the selected image
+    image = Image.open(file_path)
+    
+    # Convert to grayscale for intensity-based segmentation
+    image_np = np.array(image)
+    image_np_gs = np.array(image.convert('L'))  # Grayscale conversion
+
+    # Display the grayscale image
+    plt.imshow(image_np_gs, cmap='gray')
+    plt.axis('off')
+    plt.title("Grayscale Image")
+    plt.show()
+
+    # Flatten the grayscale image array for histogram plotting
+    array = image_np_gs.ravel()
+    plt.hist(array, bins=256, range=(0, 256), color='gray')
+    plt.title('Histogram of Pixel Intensities (Grayscale)')
+    plt.xlabel('Pixel Intensity')
+    plt.ylabel('Frequency')
+    plt.show()
+
+    # Step 1: Apply adaptive thresholding to segment platelets
+    # Adaptive thresholding helps to adjust to variable lighting in the image
+    thresholded_img = cv2.adaptiveThreshold(
+        image_np_gs, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY_INV, 11, 2
+    )
+
+    # Display the thresholded image (binary)
+    plt.imshow(thresholded_img, cmap='gray')
+    plt.title("Adaptive Thresholded Image for Platelet Segmentation")
+    plt.axis('off')
+    plt.show()
+
+    # Step 2: Apply morphological operations to reduce noise
+    kernel = np.ones((3, 3), np.uint8)
+    cleaned_img = cv2.morphologyEx(thresholded_img, cv2.MORPH_OPEN, kernel, iterations=2)
+
+    # Display the cleaned (noise-reduced) image
+    plt.imshow(cleaned_img, cmap='gray')
+    plt.title("Cleaned Binary Image (Noise Reduced)")
+    plt.axis('off')
+    plt.show()
+
+    # Step 3: Find contours to identify and isolate platelets based on size
+    contours, _ = cv2.findContours(cleaned_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Filter contours by area to identify platelets specifically
+    platelets = [cnt for cnt in contours if 5 < cv2.contourArea(cnt) < 90]
+
+    # Draw contours of identified platelets on the original image
+    image_with_platelets = image_np.copy()
+    cv2.drawContours(image_with_platelets, platelets, -1, (255, 0, 0), 1)  # Draw platelets in red for visibility
+
+    # Display the image with platelet contours
+    plt.imshow(image_with_platelets)
+    plt.axis('off')
+    plt.title("Identified Platelets (Outlined in Red)")
+    plt.show()
+
+    # Optional: Count and display the number of platelets detected
+    platelet_count = len(platelets)
+    print("Number of platelets identified:", platelet_count)
+else:
+    print("No file selected.")
